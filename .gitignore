@@ -1,0 +1,15 @@
+# PlatformIO
+.pio/
+firmware/.vscode/
+firmware/compile_commands.json
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+
+# Ground station session logs
+ground/logs/
+
+# macOS
+.DS_Store
