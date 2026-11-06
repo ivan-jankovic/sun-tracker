@@ -68,9 +68,15 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 | **SAFE** | parks at 90° and stays passive | `SEARCH` command → SEARCH |
 | **FAULT** | holds the last angle, no motion | `CLEAR` command, and the self-test and sensor checks pass → SEARCH |
 
-- Any fault, from any mode, goes to FAULT.
+- Any fault, from any mode, goes to FAULT. In the same cycle, a fault wins over every other rule.
 - `SAFE` from any mode except FAULT goes to SAFE (`cmd_safe`). In FAULT it is refused, because a fault must be cleared first.
 - Every transition sends an `EV` event with the old mode, the new mode and the reason.
+- `BOOT` is a pseudo-mode that exists only until the boot self-test has run, so the first event reads `EV,…,MODE,BOOT,SEARCH,boot` (or `BOOT,FAULT,fault`). It never appears in `TM`.
+- A command that would not change the mode, `SAFE` in SAFE or `SEARCH` in SEARCH, is acknowledged and sends no event, because no transition happened.
+- `INJECT` is refused in FAULT (`fault_latched`). `CAL` is accepted only in SAFE (`not_in_safe`), where the platform is parked and still.
+- A failed `CLEAR` stays in FAULT and is refused with `selftest_failed`.
+- A full sweep is one run from end stop to end stop. The partial run from the angle where SEARCH started does not count. The sweep starts upwards, or downwards if it is already at the top end stop.
+- Entering a mode restarts its counters: after `sun_lost` or `CLEAR`, SEARCH again needs the sun for 3 cycles in a row.
 
 ## Controller (TRACKING)
 
