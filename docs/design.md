@@ -114,8 +114,9 @@ TM,<seq>,<t_ms>,<mode>,<l_mv>,<r_mv>,<err>,<angle_deg>,<fault>,<sun_deg>
 TM,1042,52100,TRACKING,2215,2180,0.008,97.5,-,-
 ```
 
-- `seq`: one counter for every `TM`, `EV`, `ACK` and `NACK` line, so the ground station can count lost lines.
-- `err`: 3 decimals; `angle_deg`: 1 decimal, commanded.
+- Lines from the firmware end with `\n`.
+- `seq`: one counter for every `TM`, `EV`, `ACK` and `NACK` line, so the ground station can count lost lines. It starts at 0 at boot, so a jump back to 0 means the board has restarted.
+- `err`: 3 decimals; `angle_deg`: 1 decimal, commanded. Values are rounded before printing, so a tiny negative value prints as `0.000`, never `-0.000`.
 - `fault`: the active fault code or `-`.
 - `sun_deg`: the simulated light angle in the `esp32dev-sim` build, `-` on the real sensors.
 
