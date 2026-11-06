@@ -26,13 +26,14 @@ A single-axis model of spacecraft sun acquisition: find the light source, point 
 | Servo orange | D26 | 50 Hz PWM, 3.3 V logic |
 | Capacitor | + rail / − rail | stripe (−) to GND, next to the servo wires |
 
-Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. More light means lower resistance and a higher voltage. 4.7 kΩ keeps a torch close to the sensor below ADC saturation; 10 kΩ saturates near 3.1 V. A disconnected photoresistor leaves the midpoint pulled to GND, so it reads about 0 mV.
+Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. More light means lower resistance and a higher voltage. 4.7 kΩ keeps a torch close to the sensor below ADC saturation; 10 kΩ saturates near 3.1 V. A disconnected photoresistor leaves the midpoint pulled to GND, so it reads the ADC floor (below).
 
 ## Sensing
 
 - Each control cycle reads both channels with `analogReadMilliVolts()`, averaging 8 samples per channel.
-- The right channel is multiplied by `R_GAIN` *(cal, 1.0)* to cancel the mismatch between the two photoresistors: with both equally lit, `L ≈ R`.
-- Pointing error: `e = (L − R) / (L + R)`, in −1…+1, and 0 when the sum is below 100 mV (no light, no direction).
+- ADC floor: 0 V reads as `ADC_FLOOR_MV` = 142 mV (raw 0), measured with D34 and D35 tied to GND. Below about 150 mV the ADC cannot tell voltages apart, so every threshold near zero is set relative to the floor. Another board needs this measured again.
+- The right channel is multiplied by `R_GAIN` *(cal, 1.0)* to cancel the mismatch between the two photoresistors: with both equally lit, `L ≈ R`. Measured with a torch from the front: L and R within 1 %.
+- Pointing error: `e = (L − R) / (L + R)`, in −1…+1, and 0 when the sum is below `NO_LIGHT_SUM_MV` (twice the floor + 100 mV: no light, no direction).
 - Sign convention: `e > 0` means the left side is brighter, so the light is to the left, and the controller increases the angle. If the servo is mounted the other way round, `DIRECTION` in `config.h` flips it.
 - Sun present: the sum `L + R` with hysteresis, so the mode does not flicker at the threshold: enter at `SUN_ENTER_MV` *(cal, 3600)*, leave below `SUN_EXIT_MV` *(cal, 3000)*.
 
@@ -86,13 +87,13 @@ A proportional controller is enough: the servo itself closes the position loop, 
 
 | Code | Condition | Why |
 |---|---|---|
-| `SELFTEST_SHORT` | at boot or on `CLEAR`: with D25 LOW, either channel reads above 150 mV | the divider midpoint touches a supply, e.g. row S shorted to row L |
-| `SENSOR_OPEN_L` / `SENSOR_OPEN_R` | one channel below `OPEN_MV` *(cal, 30)* while the other is above 500 mV, for 20 cycles (1 s) | a disconnected photoresistor; uniform darkness cannot cause it, because both channels would be low |
+| `SELFTEST_SHORT` | at boot or on `CLEAR`: with D25 LOW, either channel reads above `SELFTEST_SHORT_MV` (floor + 100 mV) | the divider midpoint touches a supply, e.g. row S shorted to row L |
+| `SENSOR_OPEN_L` / `SENSOR_OPEN_R` | one channel below `OPEN_MV` *(cal, floor + 60 mV)* while the other is above 500 mV, for 20 cycles (1 s) | a disconnected photoresistor; uniform darkness cannot cause it, because both channels would be low |
 | `INJECTED_L` / `INJECTED_R` | the `INJECT` telecommand | tests the fault path on demand, without touching the wiring |
 
-An injected fault makes the firmware behave as if that channel read 0 mV, so it goes through the same detection as a real open sensor. `CLEAR` removes the injection.
+An injected fault makes the firmware behave as if that channel read the ADC floor, which is what a really open sensor reads. So it goes through the same detection, with the same 20-cycle debounce. When the detection fires on the injected channel, the code is `INJECTED_L` or `INJECTED_R`, and otherwise `SENSOR_OPEN_L` or `SENSOR_OPEN_R`. `CLEAR` removes the injection.
 
-`OPEN_MV` must stay below the darkest reading of a shadowed but connected sensor at the demo, for example a torch from the side in a dimmed room. The calibration measures that reading, and the threshold goes below it with margin.
+`OPEN_MV` must stay below the darkest reading of a shadowed but connected sensor at the demo, for example a torch from the side in a dimmed room. The calibration measures that reading, and the threshold goes below it with margin. Measured with the torch from the side: the shaded sensor read 374 mV or more in a dark room and 1215 mV or more in bright room light, and a removed photoresistor read exactly the floor. With D25 LOW, both channels read the floor.
 
 Known gaps: a short between row S and a midpoint while D25 is HIGH reads as a very bright sensor, and only the next self-test (boot or `CLEAR`) catches it. Servo faults are not detectable without position feedback.
 
