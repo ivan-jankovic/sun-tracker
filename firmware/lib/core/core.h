@@ -48,7 +48,7 @@ public:
 
 private:
     SensorReading measure();
-    void act(float e);
+    void act(float e, bool sensor_suspect);
     void enter(const Transition& t, uint32_t t_ms);
     void raise_fault(FaultCode code, uint32_t t_ms);
     FaultCode run_checks();

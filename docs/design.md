@@ -97,11 +97,18 @@ A proportional controller is enough: the servo itself closes the position loop, 
 
 | Code | Condition | Why |
 |---|---|---|
-| `SELFTEST_SHORT` | at boot or on `CLEAR`: with D25 LOW, either channel reads above `SELFTEST_SHORT_MV` (floor + 100 mV) | the divider midpoint touches a supply, e.g. row S shorted to row L |
+| `SELFTEST_SHORT` | at boot or on `CLEAR`: with D25 LOW, either channel reads above `SELFTEST_SHORT_MV` (floor + 100 mV) | the divider midpoint touches a supply other than D25, e.g. the 3V3 pin |
 | `SENSOR_OPEN_L` / `SENSOR_OPEN_R` | one channel below `OPEN_MV` *(cal, floor + 60 mV)* while the other is above 500 mV, for 20 cycles (1 s) | a disconnected photoresistor; uniform darkness cannot cause it, because both channels would be low |
 | `INJECTED_L` / `INJECTED_R` | the `INJECT` telecommand | tests the fault path on demand, without touching the wiring |
 
 An injected fault makes the firmware behave as if that channel read the ADC floor, which is what a really open sensor reads. So it goes through the same detection, with the same 20-cycle debounce. When the detection fires on the injected channel, the code is `INJECTED_L` or `INJECTED_R`, and otherwise `SENSOR_OPEN_L` or `SENSOR_OPEN_R`. Only one channel can be injected at a time, and a second `INJECT` replaces the first: with both channels at the floor, the open-sensor rule could never fire. In a dark room the injection stays pending until the other channel is above 500 mV.
+
+While the open-sensor condition holds, even before the debounce is complete, the readings are not trusted and the platform holds still in TRACKING and SEARCH. Without this, the SIL found that an open sensor in the dark room was never detected while the light was in view:
+1. The controller saw `e ≈ −0.9` and turned away from the light.
+2. The other channel fell into the wall's shadow, below 500 mV, which restarted the debounce.
+3. `sun_lost`, then SEARCH found the light again and the loop repeated, with the condition never holding for 20 cycles.
+
+With the hold, the fault latches after exactly 1 s in both the dark and the bright room, with the platform still pointed where it was. Holding cannot get stuck: either the condition lasts for the debounce (FAULT), or it ends and the motion continues. In the bright room, the open channel also takes `L + R` below the exit threshold, so `sun_lost` comes 0.5 s before the fault.
 
 `CLEAR` in FAULT:
 1. Removes the injection, even if the checks then fail.
@@ -112,7 +119,7 @@ An injected fault makes the firmware behave as if that channel read the ADC floo
 
 `OPEN_MV` must stay below the darkest reading of a shadowed but connected sensor at the demo, for example a torch from the side in a dimmed room. The calibration measures that reading, and the threshold goes below it with margin. Measured with the torch from the side: the shaded sensor read 374 mV or more in a dark room and 1215 mV or more in bright room light, and a removed photoresistor read exactly the floor. With D25 LOW, both channels read the floor.
 
-Known gaps: a short between row S and a midpoint while D25 is HIGH reads as a very bright sensor, and only the next self-test (boot or `CLEAR`) catches it. Servo faults are not detectable without position feedback.
+Known gaps: a short between row S and a midpoint is not detected. With D25 HIGH that channel reads as a fully lit sensor. With D25 LOW, row S is at 0 V too, so the channel reads the floor like a healthy one, and the self-test passes. Servo faults are not detectable without position feedback.
 
 ## Protocol
 
@@ -168,18 +175,34 @@ Every command gets exactly one reply: `ACK,<seq>,<command>` or `NACK,<seq>,<comm
 The same core logic runs in three places:
 
 1. **Unit tests** (`pio test -e native`): the controller, mode transitions, fault rules and command parsing, one rule per test.
-2. **SIL scenarios** (also `native`): the core runs in a loop against a model of the light and the platform. Scenarios: acquisition from either end stop, tracking a moving light, light lost and found again, three sweeps without light, an open sensor, an injected fault and `CLEAR`, and that the commanded angle never leaves the end stops.
+2. **SIL scenarios** (also `native`): the core runs in a loop against a model of the light and the platform, in the measured dark and bright rooms. Scenarios: acquisition near either end stop, a light beyond an end stop, tracking a moving light, light lost and found again, three sweeps without light, a dark room without `CAL`, an open sensor in both rooms, an injected fault and `CLEAR`, a short at boot, and repeatability for a given seed. Every scenario also checks that the commanded angle never left the end stops.
 3. **`esp32dev-sim` on the board**: the real firmware and serial protocol, with the sensor readings computed from the model and the commanded angle. The ground station can be built and demonstrated before the sensors exist, and `SIM SUN` moves the light from a slider.
 
 Light model, with `δ = sun_deg − angle_deg`:
 
 ```
 visible = max(0, cos δ)
-L = ambient + intensity · visible · clamp(0.5 + δ / W, 0, 1) + noise
-R = ambient + intensity · visible · clamp(0.5 − δ / W, 0, 1) + noise
+L = ambient_l + intensity · visible · clamp(0.5 + δ / W, 0, 1) + noise
+R = ambient_r + intensity · visible · clamp(0.5 − δ / W, 0, 1) + noise
 ```
 
-`W` *(30°)* stands for the width of the wall's shadow. Values are clamped to 0-3300 mV, and the noise is seeded, so a failing scenario repeats exactly.
+- `W` *(30°)* stands for the width of the wall's shadow.
+- Values are clamped to the ADC floor (142 mV) and 3300 mV, so the model reads like the real ADC. An open channel reads exactly the floor.
+- The noise is uniform and comes from a seeded xorshift32 generator, so a failing scenario repeats exactly, on the host and on the ESP32.
+- Room presets from the measurements:
+  - dark room: ambient 283 / 290 mV, intensity 3400 mV
+  - bright room: ambient 1727 / 1727 mV, intensity 1160 mV
+
+  The real bright room read 2166 / 1288 mV, with the light from the left. The model adds light in millivolts and ignores the photoresistor's lower response in bright light, so that imbalance would cause a much larger pointing bias in the model than on the real sensor. The model spreads it evenly instead.
+
+Measured in the SIL:
+
+| What | Result |
+|---|---|
+| open sensor or injection to FAULT, dark and bright room | 1.00 s (the debounce) |
+| SEARCH to SAFE without light, from 90° | 12.65 s |
+| worst pointing error, light moving at 10°/s | 0.64° |
+| settling precision, dark / bright room | ±0.7° / ±2.4° (the dead band in degrees) |
 
 ## Ground station
 
@@ -217,4 +240,5 @@ ground/
 - The SG90 has no position feedback, so a stalled or slipping servo goes unnoticed.
 - Photoresistors are slow (about 30 ms) and non-linear; good enough for direction, not for accurate angles.
 - Indoors, room light raises both channels. `CAL` puts the sun-present thresholds above the room light on site, but the torch must still stand out: in the bright room it added only +1160 mV from the front. In bright light the photoresistors are already low in resistance, so extra light changes the voltage little. The demo works best in a dimmed room, with the torch close.
+- Room light makes the error smaller for the same angle, so the dead band covers more degrees: the platform settles within ±0.7° in the dark room, but only within ±2.4° in the bright room.
 - Room light from one side biases the pointing towards it: with room light alone, `e` was 0.25. This is the counterpart of Earth albedo for a real coarse sun sensor. Subtracting the room light per channel would only be correct at the angle where `CAL` measured it, because the wall shades differently at every angle, so it is not done. The bias shrinks as the torch gets brighter relative to the room.

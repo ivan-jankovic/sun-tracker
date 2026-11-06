@@ -39,7 +39,14 @@ void Core::step(uint32_t t_ms) {
     const Transition t = modes_.cycle(in);
     if (t.changed && t.to == Mode::Fault) raise_fault(in.fault, t_ms);
     enter(t, t_ms);
-    act(e);
+
+    // While a sensor looks open, its reading is not trusted, so the platform holds still
+    // in TRACKING and SEARCH. Otherwise it would turn away from the light, the other
+    // channel would fall into the wall's shadow and restart the debounce, and the fault
+    // might never latch. Holding cannot get stuck: either the condition lasts for the
+    // debounce (FAULT) or it ends and the motion continues.
+    const bool suspect = open_sensor(r.l_mv, r.r_mv, params_.faults) != FaultCode::None;
+    act(e, suspect);
 
     if (++cycles_ % params_.telemetry_every_cycles == 0) {
         Telemetry tm;
@@ -111,13 +118,13 @@ SensorReading Core::measure() {
     return r;
 }
 
-void Core::act(float e) {
+void Core::act(float e, bool sensor_suspect) {
     switch (modes_.mode()) {
         case Mode::Tracking:
-            angle_deg_ = tracking_step(angle_deg_, e, params_.controller);
+            if (!sensor_suspect) angle_deg_ = tracking_step(angle_deg_, e, params_.controller);
             break;
         case Mode::Search:
-            angle_deg_ = sweep_.step();
+            if (!sensor_suspect) angle_deg_ = sweep_.step();
             break;
         case Mode::Safe:
             angle_deg_ = params_.park_deg;

@@ -202,6 +202,15 @@ void test_tracking_turns_towards_the_brighter_side() {
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, before + config::KP * 0.2f, rig.core.angle_deg());
 }
 
+void test_tracking_holds_while_a_sensor_looks_open() {
+    Rig rig;
+    rig.to_tracking();
+    const float before = rig.core.angle_deg();
+    rig.sensors.lit = {FLOOR, BRIGHT};  // e = -0.89, but L reads like an open sensor
+    rig.step(fp.open_fault_cycles - 1);
+    TEST_ASSERT_EQUAL_FLOAT(before, rig.core.angle_deg());
+}
+
 void test_tracking_holds_inside_the_deadband() {
     Rig rig;
     rig.to_tracking();
@@ -487,6 +496,7 @@ int main() {
     RUN_TEST(test_telemetry_applies_r_gain);
     RUN_TEST(test_sun_present_for_enough_cycles_starts_tracking);
     RUN_TEST(test_tracking_turns_towards_the_brighter_side);
+    RUN_TEST(test_tracking_holds_while_a_sensor_looks_open);
     RUN_TEST(test_tracking_holds_inside_the_deadband);
     RUN_TEST(test_sun_absent_for_enough_cycles_returns_to_search);
     RUN_TEST(test_three_sweeps_without_sun_go_to_safe);
