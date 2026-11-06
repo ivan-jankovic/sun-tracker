@@ -58,6 +58,11 @@ inline constexpr int32_t OPEN_MV = ADC_FLOOR_MV + 60;
 inline constexpr int32_t OPEN_OTHER_MIN_MV = 500;  // only if the other channel is above this
 inline constexpr uint32_t OPEN_FAULT_CYCLES = 20;
 
+// Telecommands
+inline constexpr uint32_t COMMAND_MAX_CHARS = 32;  // longer lines are refused as unknown
+inline constexpr float SIM_SUN_MIN_DEG = -180.0f;  // -90 puts the light behind the platform
+inline constexpr float SIM_SUN_MAX_DEG = 180.0f;
+
 // Derived per-cycle steps, so the rates above stay the only source of truth.
 inline constexpr float MAX_STEP_DEG = MAX_RATE_DEG_S * CYCLE_MS / 1000.0f;
 inline constexpr float SEARCH_STEP_DEG = SEARCH_RATE_DEG_S * CYCLE_MS / 1000.0f;

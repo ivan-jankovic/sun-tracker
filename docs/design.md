@@ -118,7 +118,10 @@ TM,1042,52100,TRACKING,2215,2180,0.008,97.5,-,-
 ```
 EV,<seq>,<t_ms>,MODE,<from>,<to>,<reason>
 EV,<seq>,<t_ms>,FAULT,<code>
+EV,<seq>,<t_ms>,CAL,<room_mv>,<enter_mv>,<exit_mv>
 ```
+
+- `CAL`: the result of a successful `CAL` telecommand. `room_mv` is the measured room-light sum `L + R`, and `enter_mv` and `exit_mv` are the new sun-present thresholds.
 
 Reasons: `boot`, `sun_found`, `sun_lost`, `no_sun`, `cmd_safe`, `cmd_search`, `cmd_clear`, `fault`.
 
@@ -131,9 +134,15 @@ Reasons: `boot`, `sun_found`, `sun_lost`, `no_sun`, `cmd_safe`, `cmd_search`, `c
 | `SEARCH` | from SAFE or TRACKING to SEARCH; refused in FAULT |
 | `CLEAR` | in FAULT: removes injections, reruns the checks, and goes to SEARCH if they pass |
 | `INJECT L` / `INJECT R` | injects an open-sensor fault on that channel |
-| `SIM SUN <deg>` | moves the simulated light, `esp32dev-sim` only |
+| `CAL` | in SAFE: measures the room light and sets the sun-present thresholds from it (the torch must be off) |
+| `SIM SUN <deg>` | moves the simulated light, `esp32dev-sim` only; −180…180, so −90 puts the light behind the platform |
 
-Every command gets exactly one reply: `ACK,<seq>,<command>` or `NACK,<seq>,<command>,<reason>` (`unknown`, `bad_arg`, `fault_latched`, `not_in_fault`, `not_sim`, `selftest_failed`).
+Every command gets exactly one reply: `ACK,<seq>,<command>` or `NACK,<seq>,<command>,<reason>` (`unknown`, `bad_arg`, `fault_latched`, `not_in_fault`, `not_in_safe`, `cal_out_of_range`, `not_sim`, `selftest_failed`).
+
+- Syntax: upper-case words separated by spaces, at most 32 characters. Whitespace at either end, including the CR of a CRLF line end, is ignored.
+- `unknown`: not a command, including lower case and over-long lines. `bad_arg`: a known command with a missing, extra or invalid argument.
+- `<deg>` is a plain decimal number such as `45`, `-90` or `12.5`. Exponents, hex, `nan` and `inf` are refused.
+- `<command>` in the reply echoes the received line with commas and unprintable characters replaced by `_`, so the reply always has the same number of fields.
 
 ## Simulation
 
