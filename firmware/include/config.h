@@ -24,8 +24,17 @@ inline constexpr uint32_t ADC_SAMPLES = 8;  // averaged per channel, per cycle
 inline constexpr int32_t ADC_FLOOR_MV = 142;
 inline constexpr float R_GAIN = 1.0f;  // (cal) right channel mismatch
 inline constexpr int32_t NO_LIGHT_SUM_MV = 2 * ADC_FLOOR_MV + 100;  // below this L + R, e is 0
-inline constexpr int32_t SUN_ENTER_MV = 3600;    // (cal) L + R to declare sun present
-inline constexpr int32_t SUN_EXIT_MV = 3000;     // (cal) L + R below this: sun absent
+// Sun present from L + R. These are the boot defaults until CAL measures the room.
+// They are set high on purpose: without CAL, a dark room leads to SAFE (no_sun)
+// rather than room light being tracked as the sun.
+inline constexpr int32_t SUN_ENTER_MV = 4100;  // (cal) L + R to declare sun present
+inline constexpr int32_t SUN_EXIT_MV = 3800;   // (cal) L + R below this: sun absent
+// CAL: thresholds = measured room light + margin. Set by the bright room, where the
+// torch from the front added +1160 mV (+3400 mV in a dark room).
+inline constexpr int32_t SUN_ENTER_MARGIN_MV = 600;
+inline constexpr int32_t SUN_EXIT_MARGIN_MV = 300;
+// CAL refuses a room so bright that L + R could not reliably rise above the threshold.
+inline constexpr int32_t SUN_ENTER_MAX_MV = 5600;
 
 // Actuator
 inline constexpr uint32_t SERVO_PWM_HZ = 50;
@@ -68,6 +77,8 @@ inline constexpr float MAX_STEP_DEG = MAX_RATE_DEG_S * CYCLE_MS / 1000.0f;
 inline constexpr float SEARCH_STEP_DEG = SEARCH_RATE_DEG_S * CYCLE_MS / 1000.0f;
 
 static_assert(SUN_EXIT_MV < SUN_ENTER_MV, "sun hysteresis needs exit below enter");
+static_assert(SUN_EXIT_MARGIN_MV < SUN_ENTER_MARGIN_MV, "CAL hysteresis needs exit below enter");
+static_assert(SUN_ENTER_MV <= SUN_ENTER_MAX_MV, "boot default must be reachable");
 static_assert(ANGLE_MIN_DEG < ANGLE_PARK_DEG && ANGLE_PARK_DEG < ANGLE_MAX_DEG,
               "park position must lie between the end stops");
 static_assert(DIRECTION == 1 || DIRECTION == -1, "DIRECTION is a sign");

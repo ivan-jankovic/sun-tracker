@@ -93,6 +93,31 @@ void test_sun_stays_absent_between_thresholds_after_leaving() {
     TEST_ASSERT_FALSE(sun.update(params.sun_enter_mv - 1));
 }
 
+void test_new_thresholds_apply_to_the_next_update() {
+    SunPresence sun;
+    sun.set_thresholds(1000, 800);
+    TEST_ASSERT_TRUE(sun.update(1000));
+    TEST_ASSERT_TRUE(sun.update(800));
+    TEST_ASSERT_FALSE(sun.update(799));
+}
+
+void test_calibration_adds_the_margins_to_the_room_light() {
+    const core::SunCalibration cal = core::calibrate_sun(573);
+    TEST_ASSERT_TRUE(cal.ok);
+    TEST_ASSERT_EQUAL_INT32(573 + params.sun_enter_margin_mv, cal.enter_mv);
+    TEST_ASSERT_EQUAL_INT32(573 + params.sun_exit_margin_mv, cal.exit_mv);
+}
+
+void test_calibration_accepts_a_room_up_to_the_limit() {
+    const int32_t room = params.sun_enter_max_mv - params.sun_enter_margin_mv;
+    TEST_ASSERT_TRUE(core::calibrate_sun(room).ok);
+}
+
+void test_calibration_refuses_a_room_above_the_limit() {
+    const int32_t room = params.sun_enter_max_mv - params.sun_enter_margin_mv + 1;
+    TEST_ASSERT_FALSE(core::calibrate_sun(room).ok);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_equal_light_gives_zero_error);
@@ -110,5 +135,9 @@ int main() {
     RUN_TEST(test_sun_stays_present_between_thresholds);
     RUN_TEST(test_sun_leaves_below_exit_threshold);
     RUN_TEST(test_sun_stays_absent_between_thresholds_after_leaving);
+    RUN_TEST(test_new_thresholds_apply_to_the_next_update);
+    RUN_TEST(test_calibration_adds_the_margins_to_the_room_light);
+    RUN_TEST(test_calibration_accepts_a_room_up_to_the_limit);
+    RUN_TEST(test_calibration_refuses_a_room_above_the_limit);
     return UNITY_END();
 }

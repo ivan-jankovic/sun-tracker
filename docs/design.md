@@ -35,7 +35,9 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 - The right channel is multiplied by `R_GAIN` *(cal, 1.0)* to cancel the mismatch between the two photoresistors: with both equally lit, `L ≈ R`. Measured with a torch from the front: L and R within 1 %.
 - Pointing error: `e = (L − R) / (L + R)`, in −1…+1, and 0 when the sum is below `NO_LIGHT_SUM_MV` (twice the floor + 100 mV: no light, no direction).
 - Sign convention: `e > 0` means the left side is brighter, so the light is to the left, and the controller increases the angle. If the servo is mounted the other way round, `DIRECTION` in `config.h` flips it.
-- Sun present: the sum `L + R` with hysteresis, so the mode does not flicker at the threshold: enter at `SUN_ENTER_MV` *(cal, 3600)*, leave below `SUN_EXIT_MV` *(cal, 3000)*.
+- Sun present: the sum `L + R` with hysteresis, so the mode does not flicker at the threshold: enter at the enter threshold, leave below the exit threshold.
+- The demo room is not known in advance, and room light alone ranged from 573 mV (dark room) to 3454 mV (bright room). So the thresholds are set on site with `CAL`, in SAFE with the torch off: enter = room + `SUN_ENTER_MARGIN_MV` *(cal, 600)*, exit = room + `SUN_EXIT_MARGIN_MV` *(cal, 300)*. The margins are set by the bright room, where the torch from the front added +1160 mV (+3400 mV in the dark room). `CAL` is refused (`cal_out_of_range`) if the enter threshold would be above `SUN_ENTER_MAX_MV` *(5600)*, and the old thresholds stay.
+- Until `CAL`, the boot defaults `SUN_ENTER_MV` *(4100)* and `SUN_EXIT_MV` *(3800)* apply. They are high on purpose: without `CAL`, a dark room ends in SAFE (`no_sun`) instead of the room light being tracked as the sun. Demo procedure: boot → SAFE → `CAL` with the torch off → `SEARCH`.
 
 ## Actuator
 
@@ -77,6 +79,8 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 - A failed `CLEAR` stays in FAULT and is refused with `selftest_failed`.
 - A full sweep is one run from end stop to end stop. The partial run from the angle where SEARCH started does not count. The sweep starts upwards, or downwards if it is already at the top end stop.
 - Entering a mode restarts its counters: after `sun_lost` or `CLEAR`, SEARCH again needs the sun for 3 cycles in a row.
+- A new mode acts in the same cycle: after `sun_found` the first controller step happens at once, and SAFE commands 90° at once, without rate limiting.
+- Order of lines: a command's `ACK` or `NACK` comes first, then the events it caused. A detected fault sends `EV FAULT` first, then `EV MODE` (cause before effect).
 
 ## Controller (TRACKING)
 
@@ -97,7 +101,14 @@ A proportional controller is enough: the servo itself closes the position loop, 
 | `SENSOR_OPEN_L` / `SENSOR_OPEN_R` | one channel below `OPEN_MV` *(cal, floor + 60 mV)* while the other is above 500 mV, for 20 cycles (1 s) | a disconnected photoresistor; uniform darkness cannot cause it, because both channels would be low |
 | `INJECTED_L` / `INJECTED_R` | the `INJECT` telecommand | tests the fault path on demand, without touching the wiring |
 
-An injected fault makes the firmware behave as if that channel read the ADC floor, which is what a really open sensor reads. So it goes through the same detection, with the same 20-cycle debounce. When the detection fires on the injected channel, the code is `INJECTED_L` or `INJECTED_R`, and otherwise `SENSOR_OPEN_L` or `SENSOR_OPEN_R`. `CLEAR` removes the injection.
+An injected fault makes the firmware behave as if that channel read the ADC floor, which is what a really open sensor reads. So it goes through the same detection, with the same 20-cycle debounce. When the detection fires on the injected channel, the code is `INJECTED_L` or `INJECTED_R`, and otherwise `SENSOR_OPEN_L` or `SENSOR_OPEN_R`. Only one channel can be injected at a time, and a second `INJECT` replaces the first: with both channels at the floor, the open-sensor rule could never fire. In a dark room the injection stays pending until the other channel is above 500 mV.
+
+`CLEAR` in FAULT:
+1. Removes the injection, even if the checks then fail.
+2. Runs the self-test (D25 LOW).
+3. If it passes, takes one reading with D25 HIGH and applies the open-sensor rule once, without the 20-cycle debounce.
+4. If both pass: `ACK`, the fault is cleared, the debounce restarts, and the mode goes to SEARCH (`cmd_clear`).
+5. If a check fails: `NACK selftest_failed`, the mode stays FAULT, and the active fault code becomes what the check found, with an `EV FAULT` if the code changed.
 
 `OPEN_MV` must stay below the darkest reading of a shadowed but connected sensor at the demo, for example a torch from the side in a dimmed room. The calibration measures that reading, and the threshold goes below it with margin. Measured with the torch from the side: the shaded sensor read 374 mV or more in a dark room and 1215 mV or more in bright room light, and a removed photoresistor read exactly the floor. With D25 LOW, both channels read the floor.
 
@@ -117,6 +128,7 @@ TM,1042,52100,TRACKING,2215,2180,0.008,97.5,-,-
 - Lines from the firmware end with `\n`.
 - `seq`: one counter for every `TM`, `EV`, `ACK` and `NACK` line, so the ground station can count lost lines. It starts at 0 at boot, so a jump back to 0 means the board has restarted.
 - `err`: 3 decimals; `angle_deg`: 1 decimal, commanded. Values are rounded before printing, so a tiny negative value prints as `0.000`, never `-0.000`.
+- `l_mv`, `r_mv`: what the firmware works with, so `r_mv` is after `R_GAIN`, and an injected channel shows the ADC floor.
 - `fault`: the active fault code or `-`.
 - `sun_deg`: the simulated light angle in the `esp32dev-sim` build, `-` on the real sensors.
 
@@ -142,7 +154,7 @@ Reasons: `boot`, `sun_found`, `sun_lost`, `no_sun`, `cmd_safe`, `cmd_search`, `c
 | `CLEAR` | in FAULT: removes injections, reruns the checks, and goes to SEARCH if they pass |
 | `INJECT L` / `INJECT R` | injects an open-sensor fault on that channel |
 | `CAL` | in SAFE: measures the room light and sets the sun-present thresholds from it (the torch must be off) |
-| `SIM SUN <deg>` | moves the simulated light, `esp32dev-sim` only; −180…180, so −90 puts the light behind the platform |
+| `SIM SUN <deg>` | moves the simulated light, `esp32dev-sim` only, in any mode (it moves the environment, not the platform); −180…180, so −90 puts the light behind the platform |
 
 Every command gets exactly one reply: `ACK,<seq>,<command>` or `NACK,<seq>,<command>,<reason>` (`unknown`, `bad_arg`, `fault_latched`, `not_in_fault`, `not_in_safe`, `cal_out_of_range`, `not_sim`, `selftest_failed`).
 
@@ -204,4 +216,5 @@ ground/
 - One axis only. A real coarse sun sensor covers the whole sphere with several sensor faces.
 - The SG90 has no position feedback, so a stalled or slipping servo goes unnoticed.
 - Photoresistors are slow (about 30 ms) and non-linear; good enough for direction, not for accurate angles.
-- Indoors, room light raises both channels. The sun-present thresholds must sit between room light and a torch at demo distance; the demo works best in a dimmed room.
+- Indoors, room light raises both channels. `CAL` puts the sun-present thresholds above the room light on site, but the torch must still stand out: in the bright room it added only +1160 mV from the front. In bright light the photoresistors are already low in resistance, so extra light changes the voltage little. The demo works best in a dimmed room, with the torch close.
+- Room light from one side biases the pointing towards it: with room light alone, `e` was 0.25. This is the counterpart of Earth albedo for a real coarse sun sensor. Subtracting the room light per channel would only be correct at the angle where `CAL` measured it, because the wall shades differently at every angle, so it is not done. The bias shrinks as the torch gets brighter relative to the room.

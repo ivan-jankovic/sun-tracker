@@ -18,11 +18,24 @@ float pointing_error(int32_t l_mv, int32_t r_mv, const SensingParams& params) {
 
 bool SunPresence::update(int32_t sum_mv) {
     if (present_) {
-        present_ = sum_mv >= params_.sun_exit_mv;
+        present_ = sum_mv >= exit_mv_;
     } else {
-        present_ = sum_mv >= params_.sun_enter_mv;
+        present_ = sum_mv >= enter_mv_;
     }
     return present_;
+}
+
+void SunPresence::set_thresholds(int32_t enter_mv, int32_t exit_mv) {
+    enter_mv_ = enter_mv;
+    exit_mv_ = exit_mv;
+}
+
+SunCalibration calibrate_sun(int32_t room_sum_mv, const SensingParams& params) {
+    SunCalibration cal;
+    cal.enter_mv = room_sum_mv + params.sun_enter_margin_mv;
+    cal.exit_mv = room_sum_mv + params.sun_exit_margin_mv;
+    cal.ok = cal.enter_mv <= params.sun_enter_max_mv;
+    return cal;
 }
 
 }  // namespace core
