@@ -6,7 +6,9 @@ authors = [
     { name = "Ivan Jankovic", email = "ivan.jankovic@email.cz" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "pyserial>=3.5",
+]
 
 [project.scripts]
 ground = "ground:main"

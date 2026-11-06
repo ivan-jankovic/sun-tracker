@@ -214,7 +214,13 @@ Measured in the SIL:
 - **Status:** the current mode as a coloured label, the active fault, lost lines, and the last events.
 - **Commands:** buttons for `SAFE`, `SEARCH`, `CLEAR`, `INJECT L`, `INJECT R`, and a slider for `SIM SUN`.
 
-Every received line goes to a CSV log in `ground/logs/` (gitignored), so a session can be replayed. The parser is a separate module without plotting, tested with pytest.
+Every received and every sent line goes to a CSV log in `ground/logs/` (gitignored), one file per session, named after its start time, so a session can be replayed.
+- Columns: `host_time` (seconds since the epoch, 3 decimals), `dir` (`rx` from the board, `tx` to the board), `line`.
+- The log keeps the raw lines, not parsed values, so an improved parser can read old logs again.
+
+The parser is a separate module without plotting, tested with pytest. It is strict: a value the protocol does not define is an error, and a line that cannot be parsed counts as lost.
+
+The serial link reads in a background thread, so the plot window stays responsive. It splits lines only on complete line ends, and a failing port (cable pulled) is reported rather than silently stopping the display.
 
 ## Repository layout
 

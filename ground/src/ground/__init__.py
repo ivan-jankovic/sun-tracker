@@ -2,4 +2,6 @@
 
 
 def main() -> None:
-    raise SystemExit("ground: the serial link and plots are not written yet")
+    from ground.cli import main as cli_main
+
+    raise SystemExit(cli_main())
