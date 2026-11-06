@@ -19,6 +19,9 @@ inline constexpr uint32_t SERIAL_BAUD = 115200;
 
 // Sensing
 inline constexpr uint32_t ADC_SAMPLES = 8;  // averaged per channel, per cycle
+// After switching the sensor supply (D25), before reading. 5 ms was enough in the
+// measurement: with D25 LOW both channels read the floor even under a close torch.
+inline constexpr uint32_t SUPPLY_SETTLE_MS = 5;
 // Lowest reading analogReadMilliVolts() returns: 0 V reads as this (raw 0).
 // Measured with D34 and D35 tied to GND, 12-bit, 11 dB. Re-measure for another board.
 inline constexpr int32_t ADC_FLOOR_MV = 142;
