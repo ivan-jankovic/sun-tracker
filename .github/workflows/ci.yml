@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # The ESP32 toolchain is several hundred MB; keep it between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install platformio==6.2.0
+      - name: Core and SIL tests
+        run: pio test -d firmware -e native
+      - name: Board firmware
+        run: pio run -d firmware -e esp32dev
+      - name: Simulation firmware
+        run: pio run -d firmware -e esp32dev-sim
+
+  ground:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Ground station tests
+        working-directory: ground
+        # --locked fails if uv.lock does not match pyproject.toml.
+        run: uv run --locked pytest
