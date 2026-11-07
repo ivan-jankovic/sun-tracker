@@ -126,8 +126,8 @@ void Core::act(float e, bool sensor_suspect) {
         case Mode::Search:
             if (!sensor_suspect) angle_deg_ = sweep_.step();
             break;
-        case Mode::Safe:
-            angle_deg_ = params_.park_deg;
+        case Mode::Safe:  // parks at the rate limit, not in one jump
+            angle_deg_ = slew_step(angle_deg_, params_.park_deg, params_.controller.max_step_deg);
             break;
         case Mode::Fault:  // holds the last angle
         case Mode::Boot:

@@ -15,6 +15,10 @@ float tracking_step(float angle_deg, float e, const ControllerParams& params) {
     return std::clamp(target_deg, params.angle_min_deg, params.angle_max_deg);
 }
 
+float slew_step(float angle_deg, float target_deg, float max_step_deg) {
+    return angle_deg + std::clamp(target_deg - angle_deg, -max_step_deg, max_step_deg);
+}
+
 void SearchSweep::start(float angle_deg) {
     angle_deg_ = std::clamp(angle_deg, params_.angle_min_deg, params_.angle_max_deg);
     direction_ = angle_deg_ >= params_.angle_max_deg ? -1 : 1;

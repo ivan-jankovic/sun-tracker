@@ -20,6 +20,11 @@ struct ControllerParams {
 // The result never lies outside the end stops, whatever the input.
 float tracking_step(float angle_deg, float e, const ControllerParams& params = {});
 
+// One cycle towards target_deg, moving at most max_step_deg, without overshooting.
+// SAFE parks with it, so the servo never sees a large jump: on the USB supply, the
+// rail sags to about 4.1 V under load and an SG90 then crawls through big moves.
+float slew_step(float angle_deg, float target_deg, float max_step_deg);
+
 struct SweepParams {
     float step_deg = config::SEARCH_STEP_DEG;
     float angle_min_deg = config::ANGLE_MIN_DEG;

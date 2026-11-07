@@ -4,6 +4,7 @@
 
 using core::ControllerParams;
 using core::SearchSweep;
+using core::slew_step;
 using core::SweepParams;
 using core::tracking_step;
 
@@ -81,6 +82,24 @@ void test_waits_at_end_stop_while_light_is_further_out() {
 void test_out_of_range_input_is_brought_inside_end_stops() {
     TEST_ASSERT_EQUAL_FLOAT(cp.angle_max_deg, tracking_step(cp.angle_max_deg + 20.0f, 0.0f));
     TEST_ASSERT_EQUAL_FLOAT(cp.angle_min_deg, tracking_step(cp.angle_min_deg - 20.0f, 0.0f));
+}
+
+// --- slew_step ---
+
+void test_slew_moves_up_by_the_max_step() {
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f + cp.max_step_deg,
+                             slew_step(10.0f, CENTRE_DEG, cp.max_step_deg));
+}
+
+void test_slew_moves_down_by_the_max_step() {
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 170.0f - cp.max_step_deg,
+                             slew_step(170.0f, CENTRE_DEG, cp.max_step_deg));
+}
+
+void test_slew_ends_exactly_on_the_target() {
+    const float near = CENTRE_DEG + cp.max_step_deg / 2;
+    TEST_ASSERT_EQUAL_FLOAT(CENTRE_DEG, slew_step(near, CENTRE_DEG, cp.max_step_deg));
+    TEST_ASSERT_EQUAL_FLOAT(CENTRE_DEG, slew_step(CENTRE_DEG, CENTRE_DEG, cp.max_step_deg));
 }
 
 // --- SearchSweep ---
@@ -166,6 +185,9 @@ int main() {
     RUN_TEST(test_angle_is_clamped_to_bottom_end_stop);
     RUN_TEST(test_waits_at_end_stop_while_light_is_further_out);
     RUN_TEST(test_out_of_range_input_is_brought_inside_end_stops);
+    RUN_TEST(test_slew_moves_up_by_the_max_step);
+    RUN_TEST(test_slew_moves_down_by_the_max_step);
+    RUN_TEST(test_slew_ends_exactly_on_the_target);
     RUN_TEST(test_sweep_from_middle_starts_upwards);
     RUN_TEST(test_sweep_from_top_end_stop_starts_downwards);
     RUN_TEST(test_sweep_reverses_at_top_end_stop);

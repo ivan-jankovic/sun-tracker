@@ -47,6 +47,7 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 - Soft end stops at `ANGLE_MIN_DEG` *(cal, 10)* and `ANGLE_MAX_DEG` *(cal, 170)*. The controller can never command outside them.
 - The SG90 reports no position, so the commanded angle is treated as the actual one. Telemetry reports it as `angle_deg` (commanded).
 - At boot the first pulse commands 90° (centre). The platform is mounted on the horn at that position, with the wall facing forward.
+- After boot, no move is larger than `MAX_RATE_DEG_S` *(90)* × 0.05 s = 4.5° per cycle, in any mode. On USB power the 5 V rail measured 4.7 V at rest and sagged to 4.1 V under load, below the SG90's rated 4.8-6 V. Small steps still work, but a single 80° jump (SAFE used to park that way) made the servo crawl and click for seconds. So SAFE parks at the rate limit too. The boot pulse is the only jump left, because the servo's starting position is unknown.
 
 ## Modes
 
@@ -68,7 +69,7 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 |---|---|---|
 | **SEARCH** | sweeps between the end stops at `SEARCH_RATE_DEG_S` *(45)* | sun present for 3 cycles → TRACKING (`sun_found`); `SEARCH_MAX_SWEEPS` *(3)* full sweeps without sun → SAFE (`no_sun`) |
 | **TRACKING** | runs the controller | sun absent for 10 cycles (0.5 s) → SEARCH (`sun_lost`) |
-| **SAFE** | parks at 90° and stays passive | `SEARCH` command → SEARCH |
+| **SAFE** | moves to 90° at `MAX_RATE_DEG_S` *(90)*, parks there and stays passive | `SEARCH` command → SEARCH |
 | **FAULT** | holds the last angle, no motion | `CLEAR` command, and the self-test and sensor checks pass → SEARCH |
 
 - Any fault, from any mode, goes to FAULT. In the same cycle, a fault wins over every other rule.
@@ -80,7 +81,7 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 - A failed `CLEAR` stays in FAULT and is refused with `selftest_failed`.
 - A full sweep is one run from end stop to end stop. The partial run from the angle where SEARCH started does not count. The sweep starts upwards, or downwards if it is already at the top end stop.
 - Entering a mode restarts its counters: after `sun_lost` or `CLEAR`, SEARCH again needs the sun for 3 cycles in a row.
-- A new mode acts in the same cycle: after `sun_found` the first controller step happens at once, and SAFE commands 90° at once, without rate limiting.
+- A new mode acts in the same cycle: after `sun_found` the first controller step happens at once, and SAFE takes its first step towards 90° at once.
 - Order of lines: a command's `ACK` or `NACK` comes first, then the events it caused. A detected fault sends `EV FAULT` first, then `EV MODE` (cause before effect).
 
 ## Controller (TRACKING)
@@ -255,6 +256,7 @@ ground/
 
 - One axis only. A real coarse sun sensor covers the whole sphere with several sensor faces.
 - The SG90 has no position feedback, so a stalled or slipping servo goes unnoticed.
+- The servo runs below its rated voltage: USB through the board, the breadboard and the jumpers delivers 4.7 V at rest and 4.1 V under load. Rate-limiting every move keeps it working; a short, good USB cable straight into the laptop matters. A separate 5 V supply would fix it, at the cost of a second power source.
 - Photoresistors are slow (about 30 ms) and non-linear; good enough for direction, not for accurate angles.
 - Indoors, room light raises both channels. `CAL` puts the sun-present thresholds above the room light on site, but the torch must still stand out: in the bright room it added only +1160 mV from the front. In bright light the photoresistors are already low in resistance, so extra light changes the voltage little. The demo works best in a dimmed room, with the torch close.
 - Room light makes the error smaller for the same angle, so the dead band covers more degrees: the platform settles within ±0.7° in the dark room, but only within ±2.4° in the bright room.

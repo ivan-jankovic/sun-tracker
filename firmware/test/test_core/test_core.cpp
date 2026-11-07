@@ -2,6 +2,7 @@
 // what the servo is told. The light model and full scenarios are in test_sil.
 #include <unity.h>
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -244,13 +245,19 @@ void test_safe_command_acks_then_reports_the_mode_change() {
     assert_lines({"ACK,SAFE", "EV,MODE,TRACKING,SAFE,cmd_safe"}, rig.news());
 }
 
-void test_safe_parks_the_servo() {
+void test_safe_parks_the_servo_at_the_rate_limit() {
     Rig rig;
     rig.boot();
-    rig.step(10);
+    rig.step(40);  // SEARCH has swept up to about 160 deg
     rig.send("SAFE");
-    rig.step();
-    TEST_ASSERT_EQUAL_FLOAT(config::ANGLE_PARK_DEG, rig.servo.angles.back());
+    const size_t from = rig.servo.angles.size() - 1;
+    rig.step(30);
+    const std::vector<float>& a = rig.servo.angles;
+    for (size_t i = from + 1; i < a.size(); ++i) {
+        TEST_ASSERT_TRUE(std::fabs(a[i] - a[i - 1]) <= config::MAX_STEP_DEG + 1e-4f);
+    }
+    TEST_ASSERT_TRUE(a[from + 1] > config::ANGLE_PARK_DEG);  // still on the way
+    TEST_ASSERT_EQUAL_FLOAT(config::ANGLE_PARK_DEG, a.back());
 }
 
 void test_safe_command_in_safe_is_only_acked() {
@@ -501,7 +508,7 @@ int main() {
     RUN_TEST(test_sun_absent_for_enough_cycles_returns_to_search);
     RUN_TEST(test_three_sweeps_without_sun_go_to_safe);
     RUN_TEST(test_safe_command_acks_then_reports_the_mode_change);
-    RUN_TEST(test_safe_parks_the_servo);
+    RUN_TEST(test_safe_parks_the_servo_at_the_rate_limit);
     RUN_TEST(test_safe_command_in_safe_is_only_acked);
     RUN_TEST(test_search_command_from_safe_starts_search);
     RUN_TEST(test_open_sensor_reports_the_fault_then_the_mode);
