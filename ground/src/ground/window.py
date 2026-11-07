@@ -325,7 +325,10 @@ def _event_lines(state: GroundState) -> list[str]:
     for event in list(state.events)[-EVENTS_SHOWN:]:
         clock = time.strftime("%H:%M:%S", time.localtime(event.host_time))
         mark = "!" if isinstance(event.item, ParseError) else " "
-        text = event.line if len(event.line) <= EVENT_CHARS else event.line[: EVENT_CHARS - 1] + "…"
+        # A corrupted line can hold control characters the font cannot draw.
+        # The session log keeps the raw line.
+        line = "".join(c if c.isascii() and c.isprintable() else "?" for c in event.line)
+        text = line if len(line) <= EVENT_CHARS else line[: EVENT_CHARS - 1] + "…"
         lines.append(f"{clock}{mark}{text}")
     return lines
 

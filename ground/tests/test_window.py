@@ -1,6 +1,7 @@
 """Smoke tests of the plot window, drawn off-screen with the Agg backend."""
 
 import io
+import warnings
 
 import matplotlib
 
@@ -146,6 +147,15 @@ def test_bad_and_long_lines_are_marked_and_cut_in_the_event_list(window):
     assert bad.endswith("!TM,6,400,SAF")
     assert len(long) == len("00:00:00 ") + EVENT_CHARS
     assert long.endswith("…")
+
+
+def test_unprintable_characters_are_shown_as_question_marks(window):
+    window.state.feed(2000.0, "i$\x0f�RTM,1715,171458,SAFE")
+    window.refresh()
+    assert window.events_text.get_text().splitlines()[-1].endswith("!i$??RTM,1715,171458,SAFE")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # a glyph missing from the font is a warning
+        window.fig.canvas.draw()
 
 
 def test_a_replay_window_has_no_commands():
