@@ -23,8 +23,11 @@ class Received:
 
 
 class SerialLink:
-    def __init__(self, port: serial.SerialBase) -> None:
+    def __init__(self, port: serial.SerialBase, skip_first_line: bool = False) -> None:
+        """`skip_first_line`: drop everything up to the first line end, for a port just
+        opened while the board was sending. That line began before we listened."""
         self._port = port
+        self._skip_first_line = skip_first_line
         self._lines: queue.Queue[Received] = queue.Queue()
         self._stop = threading.Event()
         self._reader = threading.Thread(target=self._read_loop, name="serial-reader", daemon=True)
@@ -32,8 +35,14 @@ class SerialLink:
 
     @classmethod
     def open(cls, url: str) -> Self:
-        """Opens a port by name (/dev/cu.wchusbserial1440) or pyserial URL (loop://)."""
-        return cls(serial.serial_for_url(url, baudrate=BAUD, timeout=READ_TIMEOUT_S))
+        """Opens a port by name (/dev/cu.usbserial-1430) or pyserial URL (loop://).
+
+        Bytes the driver buffered before the port was set to BAUD are junk, so they
+        are dropped, and so is the first line, which is usually only its tail.
+        """
+        port = serial.serial_for_url(url, baudrate=BAUD, timeout=READ_TIMEOUT_S)
+        port.reset_input_buffer()
+        return cls(port, skip_first_line=True)
 
     def start(self) -> None:
         self._reader.start()
@@ -89,6 +98,9 @@ class SerialLink:
                 self.error = error
                 return
             *lines, pending = pending.split(b"\n")
+            if self._skip_first_line and lines:
+                lines = lines[1:]
+                self._skip_first_line = False
             for raw in lines:
                 # Non-ASCII bytes become U+FFFD, so the parser refuses the line.
                 line = raw.decode("ascii", errors="replace").rstrip("\r")

@@ -230,7 +230,7 @@ Every received and every sent line goes to a CSV log in `ground/logs/` (gitignor
 
 The parser is a separate module without plotting, tested with pytest. It is strict: a value the protocol does not define is an error, and a line that cannot be parsed counts as lost.
 
-The serial link reads in a background thread, so the plot window stays responsive. It splits lines only on complete line ends, and a failing port (cable pulled) is reported rather than silently stopping the display.
+The serial link reads in a background thread, so the plot window stays responsive. It splits lines only on complete line ends, and a failing port (cable pulled) is reported rather than silently stopping the display. When the port opens, the board is usually in the middle of a line, and bytes that arrived before the driver set the speed read as junk. So the link clears the driver's buffer and drops everything up to the first line end: every line it passes on was received from its start, and the `bad` count means real corruption.
 
 ## Repository layout
 

@@ -60,6 +60,30 @@ def test_non_ascii_bytes_are_replaced_not_crashed_on(port, link):
     assert link.receive(WAIT_S).line == "TM,��"
 
 
+def test_the_first_line_after_opening_is_skipped(port):
+    # The port opened in the middle of a line, after junk read at the wrong speed.
+    with SerialLink(port, skip_first_line=True) as link:
+        port.write(b"i$\x0f\xe2r\x8fRTM,1715,171458,SAFE\nACK,1716,PING\n")
+        assert link.receive(WAIT_S).line == "ACK,1716,PING"
+        assert link.receive(0.2) is None
+
+
+def test_skipping_waits_for_the_first_line_end(port):
+    with SerialLink(port, skip_first_line=True) as link:
+        port.write(b"0.000,90.0,-,90.0")
+        time.sleep(3 * READ_TIMEOUT_S)  # the reader times out before the line end
+        port.write(b"\nACK,1,PING\nACK,2,PING\n")
+        assert link.receive(WAIT_S).line == "ACK,1,PING"
+        assert link.receive(WAIT_S).line == "ACK,2,PING"
+
+
+def test_an_opened_port_skips_its_first_line():
+    with SerialLink.open("loop://") as link:
+        link.send("tail of a line")
+        link.send("PING")
+        assert link.receive(WAIT_S).line == "PING"
+
+
 def test_a_command_with_a_line_end_is_refused(link):
     with pytest.raises(ValueError):
         link.send("SAFE\nCLEAR")
