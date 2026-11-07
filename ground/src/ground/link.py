@@ -28,7 +28,7 @@ class SerialLink:
         self._lines: queue.Queue[Received] = queue.Queue()
         self._stop = threading.Event()
         self._reader = threading.Thread(target=self._read_loop, name="serial-reader", daemon=True)
-        self.error: serial.SerialException | None = None  # set if the port failed, e.g. cable pulled
+        self.error: OSError | None = None  # set if the port failed, e.g. cable pulled
 
     @classmethod
     def open(cls, url: str) -> Self:
@@ -83,7 +83,9 @@ class SerialLink:
         while not self._stop.is_set():
             try:
                 pending += self._port.read(self._port.in_waiting or 1)
-            except serial.SerialException as error:
+            # Not only SerialException: in_waiting is a bare ioctl, which raises a plain
+            # OSError when the device vanishes. SerialException is an OSError too.
+            except OSError as error:
                 self.error = error
                 return
             *lines, pending = pending.split(b"\n")

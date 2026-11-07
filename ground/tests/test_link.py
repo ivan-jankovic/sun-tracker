@@ -86,12 +86,33 @@ class FailingPort:
         pass
 
 
-def test_a_failing_port_is_reported_not_silent():
-    link = SerialLink(FailingPort())
-    link.start()
+class VanishedPort(FailingPort):
+    """A port whose device is gone: pyserial's in_waiting raises a plain OSError."""
+
+    @property
+    def in_waiting(self) -> int:
+        raise OSError(6, "Device not configured")
+
+
+def wait_until_dead(link: SerialLink) -> None:
     deadline = time.monotonic() + WAIT_S
     while link.alive and time.monotonic() < deadline:
         time.sleep(0.01)
+
+
+def test_a_failing_port_is_reported_not_silent():
+    link = SerialLink(FailingPort())
+    link.start()
+    wait_until_dead(link)
     assert not link.alive
     assert "disconnected" in str(link.error)
+    link.close()
+
+
+def test_a_vanished_device_is_reported_not_silent():
+    link = SerialLink(VanishedPort())
+    link.start()
+    wait_until_dead(link)
+    assert not link.alive
+    assert "Device not configured" in str(link.error)
     link.close()
