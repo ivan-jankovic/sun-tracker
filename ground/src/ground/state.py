@@ -44,6 +44,7 @@ class Event:
     """A line worth listing for the operator: anything but telemetry."""
 
     host_time: float
+    line: str  # as received
     item: Numbered | Log | ParseError
 
 
@@ -72,10 +73,10 @@ class GroundState:
             message = parse_line(line)
         except ParseError as error:
             self.bad_lines += 1
-            self.events.append(Event(host_time, error))
+            self.events.append(Event(host_time, line, error))
             return None
         if isinstance(message, Log):
-            self.events.append(Event(host_time, message))
+            self.events.append(Event(host_time, line, message))
             return message
 
         restarts = self._seq.restarts
@@ -101,7 +102,7 @@ class GroundState:
                 self.fault = message.code
             case CalEvent():
                 self.thresholds = Thresholds(message.enter_mv, message.exit_mv, "cal")
-        self.events.append(Event(host_time, message))
+        self.events.append(Event(host_time, line, message))
         return message
 
     def _add_telemetry(self, tm: Telemetry) -> None:

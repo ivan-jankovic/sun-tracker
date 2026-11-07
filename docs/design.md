@@ -38,6 +38,7 @@ Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. Mo
 - Sun present: the sum `L + R` with hysteresis, so the mode does not flicker at the threshold: enter at the enter threshold, leave below the exit threshold.
 - The demo room is not known in advance, and room light alone ranged from 573 mV (dark room) to 3454 mV (bright room). So the thresholds are set on site with `CAL`, in SAFE with the torch off: enter = room + `SUN_ENTER_MARGIN_MV` *(cal, 600)*, exit = room + `SUN_EXIT_MARGIN_MV` *(cal, 300)*. The margins are set by the bright room, where the torch from the front added +1160 mV (+3400 mV in the dark room). `CAL` is refused (`cal_out_of_range`) if the enter threshold would be above `SUN_ENTER_MAX_MV` *(5600)*, and the old thresholds stay.
 - Until `CAL`, the boot defaults `SUN_ENTER_MV` *(4100)* and `SUN_EXIT_MV` *(3800)* apply. They are high on purpose: without `CAL`, a dark room ends in SAFE (`no_sun`) instead of the room light being tracked as the sun. Demo procedure: boot → SAFE → `CAL` with the torch off → `SEARCH`.
+- Redo `CAL` whenever the room lighting changes. `CAL` measures the room once: switching on the ceiling light afterwards raised the room level by +300 mV, half the enter margin, which is enough to mistake room light for the sun.
 
 ## Actuator
 
@@ -206,13 +207,22 @@ Measured in the SIL:
 
 ## Ground station
 
-`uv run ground --port <port>` (on macOS, the CH340C appears as `/dev/cu.wchusbserial*` or `/dev/cu.usbserial-*`). One matplotlib window, updated live:
+`uv run ground --port <port>` (on macOS, the CH340C appears as `/dev/cu.wchusbserial*` or `/dev/cu.usbserial-*`). One matplotlib window, updated live, with the plots over the 30 s before the latest telemetry:
 
-- **Pointing:** the commanded angle over the last 30 s, plus the simulated light angle in the sim build.
-- **Sensors:** L and R in mV, with the sun-present thresholds drawn in.
-- **Error:** `e`, with the dead band shaded.
-- **Status:** the current mode as a coloured label, the active fault, lost lines, and the last events.
-- **Commands:** buttons for `SAFE`, `SEARCH`, `CLEAR`, `INJECT L`, `INJECT R`, and a slider for `SIM SUN`.
+- **Pointing:** the commanded angle with the end stops, plus the simulated light angle in the sim build.
+- **Sensors:** L, R and L + R in mV. The sun-present thresholds apply to L + R, so they are drawn against that line.
+- **Sensor balance:** `e = (L − R) / (L + R)`, titled in plain words so that a reader without control background can follow it: 0 means facing the light, + more light on L (turn up), − more light on R (turn down). The dead band is shaded.
+- **Status:** the current mode as a coloured label with its name, the active fault, the thresholds and where they come from, lost, unparseable and restart counts, the link state, and the last events.
+  - The thresholds read "boot defaults, not confirmed" until the ground station sees the board boot or an `EV CAL` line: a `CAL` sent before the ground station connected cannot be known.
+  - A board restart (seq jumps back) clears the plots, the fault and the `CAL` thresholds, because the board's clock starts at 0 again and `CAL` is kept only in RAM.
+  - If the USB link fails, the mode label reads **LINK LOST** in grey instead of the last mode received: that mode may no longer be true, and a frozen "SAFE" would look like a live one.
+- **Commands:** buttons for `SAFE`, `SEARCH`, `CAL`, `CLEAR`, `INJECT L` and `INJECT R`, and a slider for `SIM SUN`. The slider sends its latest position at most once per refresh (10 Hz), not on every step of a drag. It starts at the light angle the board reports, and again after a board restart, because the board keeps its angle between ground station sessions; after that, the slider is the source. Any other command (`PING`, an exact `SIM SUN 37.5`, a malformed command to show the strict parser) is typed in the terminal the ground station was started from, and logged like the buttons.
+
+A full redraw of the window takes about 0.6 s on a Retina screen, too slow for 10 Hz, and it blocks the GUI thread. So the window blits: the axes, grids and legends are drawn once, and each refresh redraws only the lines (about 15 ms). The time axis is therefore fixed, in seconds before the latest telemetry, rather than scrolling, and the board time is shown as a number. For the same reason there is no text box in the window: matplotlib's `TextBox` redraws the whole figure on every keystroke.
+
+Other modes: `--text` prints to the terminal instead of opening the window, and `--replay <csv>` plays a session log back in the window at its recorded pace, without commands. A replay needs no board, so a recorded run can be shown if the live demo fails.
+
+The plots draw a few firmware values: the dead band, the boot thresholds, the end stops and the `SIM SUN` range. They are copied into `ground/src/ground/limits.py`, and a test reads `firmware/include/config.h` and fails if a copy no longer matches. A copy rather than reading `config.h` at runtime, so the ground station does not need the firmware source next to it.
 
 Every received and every sent line goes to a CSV log in `ground/logs/` (gitignored), one file per session, named after its start time, so a session can be replayed.
 - Columns: `host_time` (seconds since the epoch, 3 decimals), `dir` (`rx` from the board, `tx` to the board), `line`.
@@ -235,7 +245,7 @@ firmware/
   test/                 unit tests and SIL scenarios
 ground/
   pyproject.toml, uv.lock
-  src/ground/           parser, serial link, plots
+  src/ground/           parser, serial link, log, state, window
   tests/
 .github/workflows/ci.yml  native tests, both firmware builds, ground tests
 ```

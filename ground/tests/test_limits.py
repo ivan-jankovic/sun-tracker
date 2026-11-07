@@ -19,7 +19,16 @@ def config_value(name: str) -> float:
 
 
 @pytest.mark.parametrize(
-    "name", ["DEADBAND", "SUN_ENTER_MV", "SUN_EXIT_MV", "ANGLE_MIN_DEG", "ANGLE_MAX_DEG"]
+    "name",
+    [
+        "DEADBAND",
+        "SUN_ENTER_MV",
+        "SUN_EXIT_MV",
+        "ANGLE_MIN_DEG",
+        "ANGLE_MAX_DEG",
+        "SIM_SUN_MIN_DEG",
+        "SIM_SUN_MAX_DEG",
+    ],
 )
 def test_limit_matches_the_firmware(name):
     assert getattr(limits, name) == config_value(name)
