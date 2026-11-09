@@ -5,10 +5,17 @@ A single-axis model of spacecraft sun acquisition: find the light source, point 
 ## Hardware
 
 - ESP32 DevKit V1 (ESP32-WROOM-32, CH340C), USB-powered.
-- Coarse sun sensor: two LDR5516 photoresistors on the platform, one on each side of a matt-black divider wall 3-4 cm tall. When the platform points at the light, both are lit equally. When it turns away, the wall shadows one of them.
+- Coarse sun sensor: two LDR5516 photoresistors on the platform, one on each side of a matt-black divider wall 4 cm tall. When the platform points at the light, both are lit equally. When it turns away, the wall shadows one of them.
 - Actuator: SG90 micro servo (180°), no position feedback.
 - 1000 µF / 25 V low-ESR capacitor across the servo supply, against the current spikes of the servo.
 - Half-size breadboard; only the photoresistors and the wall sit on the moving platform.
+- The platform is a cardboard head taped onto the servo's cross horn, with no soldering:
+  - a 6 × 8 cm base, with an upright 6 × 4 cm face plate across its middle, over the shaft
+  - a wall 4 cm tall and 3 cm deep, standing forward from the face plate
+  - the photoresistors pushed through the face plate 1 cm either side of the wall, facing forward
+  - female-to-male jumpers from their legs to the breadboard, leaving the platform near the rotation axis
+
+  The face plate and the wall are blackened with a marker, so that reflected light does not reach the shaded sensor. With the sensor 1 cm from a 3 cm wall, it is fully shaded about 18° off the light, which matches where `e` saturates.
 
 ### Wiring
 
@@ -26,13 +33,15 @@ A single-axis model of spacecraft sun acquisition: find the light source, point 
 | Servo orange | D26 | 50 Hz PWM, 3.3 V logic |
 | Capacitor | + rail / − rail | stripe (−) to GND, next to the servo wires |
 
+Left and right are seen from the platform, looking out at the light. Facing the platform from the front, the left photoresistor is on your right.
+
 Each divider: 3.3 V → photoresistor → midpoint (ADC) → 4.7 kΩ → GND. More light means lower resistance and a higher voltage. 4.7 kΩ keeps a torch close to the sensor below ADC saturation; 10 kΩ saturates near 3.1 V. A disconnected photoresistor leaves the midpoint pulled to GND, so it reads the ADC floor (below).
 
 ## Sensing
 
 - Each control cycle reads both channels with `analogReadMilliVolts()`, averaging 8 samples per channel.
 - ADC floor: 0 V reads as `ADC_FLOOR_MV` = 142 mV (raw 0), measured with D34 and D35 tied to GND. Below about 150 mV the ADC cannot tell voltages apart, so every threshold near zero is set relative to the floor. Another board needs this measured again.
-- The right channel is multiplied by `R_GAIN` *(cal, 1.0)* to cancel the mismatch between the two photoresistors: with both equally lit, `L ≈ R`. Measured with a torch from the front: L and R within 1 %.
+- The right channel is multiplied by `R_GAIN` *(cal, 1.0)* to cancel the mismatch between the two photoresistors: with both equally lit, `L ≈ R`. Measured with a torch from the front: L and R within 1 %. Checked again on the mounted platform, parked at 90° in SAFE with the torch in line with the wall: L and R within about 3 %, `e` ≈ +0.02, inside the dead band. So `R_GAIN` stays 1.0, and the 90° centre needs no pulse-width trim.
 - Pointing error: `e = (L − R) / (L + R)`, in −1…+1, and 0 when the sum is below `NO_LIGHT_SUM_MV` (twice the floor + 100 mV: no light, no direction).
 - Sign convention: `e > 0` means the left side is brighter, so the light is to the left, and the controller increases the angle. If the servo is mounted the other way round, `DIRECTION` in `config.h` flips it.
 - Sun present: the sum `L + R` with hysteresis, so the mode does not flicker at the threshold: enter at the enter threshold, leave below the exit threshold.
@@ -121,6 +130,8 @@ With the hold, the fault latches after exactly 1 s in both the dark and the brig
 
 `OPEN_MV` must stay below the darkest reading of a shadowed but connected sensor at the demo, for example a torch from the side in a dimmed room. The calibration measures that reading, and the threshold goes below it with margin. Measured with the torch from the side: the shaded sensor read 374 mV or more in a dark room and 1215 mV or more in bright room light, and a removed photoresistor read exactly the floor. With D25 LOW, both channels read the floor.
 
+A room that is too dark breaks this. With the room light at 306 mV in total, each channel read about 150 mV, and with 488 mV the channel shaded from a lamp read 155-180 mV, below `OPEN_MV` (202 mV). With the torch then lighting the other channel above 500 mV, a connected sensor in shadow would look open and latch a false `SENSOR_OPEN`. So the demo needs some background light, from the front rather than one side: after `CAL`, both channels should read at least about 250 mV with the torch off. A lamp behind the viewer gave 650 / 495 mV, which works.
+
 Known gaps: a short between row S and a midpoint is not detected. With D25 HIGH that channel reads as a fully lit sensor. With D25 LOW, row S is at 0 V too, so the channel reads the floor like a healthy one, and the self-test passes. Servo faults are not detectable without position feedback.
 
 ## Protocol
@@ -206,6 +217,20 @@ Measured in the SIL:
 | worst pointing error, light moving at 10°/s | 0.64° |
 | settling precision, dark / bright room | ±0.7° / ±2.4° (the dead band in degrees) |
 
+## Hardware tests
+
+Run on the mounted platform with the `esp32dev` build and a torch, after `CAL` with the room at 1150 mV (L 650, R 495). Times come from the ground station's session log.
+
+| Test | Result |
+|---|---|
+| torch moved slowly left and right while tracking | follows it across the whole 10-170° range and waits at an end stop while the torch is further out, so `DIRECTION = 1` is right |
+| torch off while tracking, then on again during the sweep | `sun_lost` → SEARCH, then `sun_found` 9 s later |
+| right photoresistor's jumper pulled while tracking | `SENSOR_OPEN_R` 1.0 s after R dropped to the floor, angle held still. It stayed in FAULT after the jumper went back, until `CLEAR`, which passed and found the torch again |
+| `INJECT L` and `INJECT R` while tracking | `INJECTED_L` / `INJECTED_R` 1.0 s after the command, angle held. `CLEAR` recovered both |
+| platform at 90°, torch in line with the wall | L and R within about 3 % (see Sensing) |
+
+The left photoresistor was not pulled, because its jumper is hard to reach without disturbing the breadboard. `INJECT L` covers that channel through the same detection.
+
 ## Ground station
 
 `uv run ground --port <port>` (on macOS, the CH340C appears as `/dev/cu.wchusbserial*` or `/dev/cu.usbserial-*`). One matplotlib window, updated live, with the plots over the 30 s before the latest telemetry:
@@ -258,6 +283,6 @@ ground/
 - The SG90 has no position feedback, so a stalled or slipping servo goes unnoticed.
 - The servo runs below its rated voltage: USB through the board, the breadboard and the jumpers delivers 4.7 V at rest and 4.1 V under load. Rate-limiting every move keeps it working; a short, good USB cable straight into the laptop matters. A separate 5 V supply would fix it, at the cost of a second power source.
 - Photoresistors are slow (about 30 ms) and non-linear; good enough for direction, not for accurate angles.
-- Indoors, room light raises both channels. `CAL` puts the sun-present thresholds above the room light on site, but the torch must still stand out: in the bright room it added only +1160 mV from the front. In bright light the photoresistors are already low in resistance, so extra light changes the voltage little. The demo works best in a dimmed room, with the torch close.
+- Indoors, room light raises both channels. `CAL` puts the sun-present thresholds above the room light on site, but the torch must still stand out: in the bright room it added only +1160 mV from the front. In bright light the photoresistors are already low in resistance, so extra light changes the voltage little. The demo works best in a dimmed room, with the torch close, but not a dark one: a shaded sensor must stay well above `OPEN_MV` (see Fault detection). With the torch off, about 250-700 mV per channel worked. At 1360 / 1060 mV, room light alone gave `e` = 0.12, three times the dead band.
 - Room light makes the error smaller for the same angle, so the dead band covers more degrees: the platform settles within ±0.7° in the dark room, but only within ±2.4° in the bright room.
 - Room light from one side biases the pointing towards it: with room light alone, `e` was 0.25. This is the counterpart of Earth albedo for a real coarse sun sensor. Subtracting the room light per channel would only be correct at the angle where `CAL` measured it, because the wall shades differently at every angle, so it is not done. The bias shrinks as the torch gets brighter relative to the room.

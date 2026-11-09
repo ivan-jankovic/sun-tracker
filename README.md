@@ -16,7 +16,8 @@ The scope is deliberately small (one axis, two sensors, one actuator), so the ef
 
 - ESP32 DevKit V1 (ESP32-WROOM-32, CH340C), powered from USB
 - 2 × LDR5516 photoresistors and 2 × 4.7 kΩ resistors
-- a matt-black divider wall, 3-4 cm tall, between the photoresistors
+- a cardboard sensor head on the servo horn: a face plate with the photoresistors, and a wall 4 cm tall and 3 cm deep between them, blackened with a marker and held with tape (details in [docs/design.md](docs/design.md#hardware))
+- 4 female-to-male jumpers from the photoresistors to the breadboard
 - SG90 micro servo
 - 1000 µF / 25 V electrolytic capacitor
 - half-size breadboard and jumper wires; no soldering
@@ -37,7 +38,7 @@ The scope is deliberately small (one axis, two sensors, one actuator), so the ef
 | Servo orange | D26 | 50 Hz PWM, 3.3 V logic |
 | Capacitor | + rail / − rail | stripe (−) to GND, next to the servo wires |
 
-Each sensor channel is a divider: 3.3 V → photoresistor → midpoint (to the ADC pin) → 4.7 kΩ → GND. More light gives a higher voltage.
+Each sensor channel is a divider: 3.3 V → photoresistor → midpoint (to the ADC pin) → 4.7 kΩ → GND. More light gives a higher voltage. Left and right are seen from the platform: facing it from the front, the left photoresistor is on your right.
 
 **Safety:**
 - The ESP32 is 3.3 V only. Never connect the 5 V rail, or anything above 3.3 V, to a GPIO or to the sensor circuit. The photoresistors are fed from D25, not from the rail.
@@ -65,7 +66,7 @@ uv run ground --replay logs/<file>.csv  # play a recorded session back, no board
 
 **Demo procedure:**
 1. Power up. Until calibrated, the light-present thresholds are deliberately high, so in most rooms the tracker searches, finds nothing it trusts and ends in SAFE.
-2. Click **SAFE** (if not already there), then with the torch off click **CAL**: the room light is measured and the thresholds set above it.
+2. Click **SAFE** (if not already there), then with the torch off click **CAL**: the room light is measured and the thresholds set above it. Dim the room, but not fully: with the torch off, both L and R should read at least about 250 mV, or a shaded sensor can look disconnected. A lamp behind you works well.
 3. Click **SEARCH** and switch the torch on: the platform sweeps, finds the light, and tracks it.
 4. Click **INJECT L**: the platform holds still, and after 1 s the board reports `INJECTED_L` and goes to FAULT. **CLEAR** runs the checks and resumes the search.
 
@@ -78,8 +79,8 @@ pio test -d firmware -e native   # core unit tests and SIL scenarios
 cd ground && uv run pytest       # ground station
 ```
 
-- **Firmware (209 tests):** one rule per test for the sensing, controller, faults, telecommand parser, mode manager and protocol, plus software-in-the-loop scenarios in the measured dark and bright rooms: acquisition, tracking a moving light, losing and finding it again, a dark room without `CAL`, open sensors, injected faults and `CLEAR`. Every scenario also checks that the platform never left its end stops.
-- **Ground station (90 tests):** the strict protocol parser with corrupted lines taken from real logs, the serial link against a loopback port, the session log, the ground state, and the plot window drawn off-screen.
+- **Firmware (212 tests):** one rule per test for the sensing, controller, faults, telecommand parser, mode manager and protocol, plus software-in-the-loop scenarios in the measured dark and bright rooms: acquisition, tracking a moving light, losing and finding it again, a dark room without `CAL`, open sensors, injected faults and `CLEAR`. Every scenario also checks that the platform never left its end stops.
+- **Ground station (94 tests):** the strict protocol parser with corrupted lines taken from real logs, the serial link against a loopback port, the session log, the ground state, and the plot window drawn off-screen.
 - **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs both test suites and builds both firmware variants on every push.
 
 Results from the SIL scenarios:
@@ -90,6 +91,8 @@ Results from the SIL scenarios:
 | no light, from SEARCH to SAFE | 12.65 s |
 | worst pointing error, light moving at 10°/s | 0.64° |
 | settling precision, dark / bright room | ±0.7° / ±2.4° |
+
+On the hardware, the platform follows a torch across its whole range, finds it again after it is switched off and on, and goes to FAULT 1.0 s after a photoresistor is pulled or a fault is injected, holding still until `CLEAR`. The full list is in [docs/design.md](docs/design.md#hardware-tests).
 
 ## Repository layout
 
