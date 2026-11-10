@@ -6,6 +6,8 @@ A single-axis sun tracker, built as a small model of spacecraft sun acquisition.
 
 The scope is deliberately small (one axis, two sensors, one actuator), so the effort goes into clear behaviour, fault handling and tests. The full design, with every rule and the reasons for it, is in [docs/design.md](docs/design.md).
 
+![The sensor head on the servo, wired to the ESP32 on a breadboard](docs/images/setup.jpg)
+
 ## How it works
 
 - **Sensor:** with the platform facing the light, both photoresistors are lit equally. When it turns away, the wall shades one of them. The balance `e = (L − R) / (L + R)` says which way to turn, and `L + R` says whether there is a light at all.
@@ -13,6 +15,10 @@ The scope is deliberately small (one axis, two sensors, one actuator), so the ef
 - **Faults:** a self-test at boot, and an open sensor detected during operation after 1 s. Faults latch until the `CLEAR` telecommand, and only clear if the checks pass. Faults can be injected from the ground station to show this.
 - **Calibration on site:** the room light at the demo is unknown, so the `CAL` telecommand measures it and sets the light-present thresholds above it.
 - **Simulation:** the core logic is plain C++ without Arduino code. It runs in host tests against a model of the light and the platform (software-in-the-loop), and in a firmware build where a simulated light replaces the photoresistors.
+
+![The ground station during a torch test](docs/images/ground-station.png)
+
+*The ground station tracking a torch. Halfway through, `INJECT L` makes the left channel read as disconnected: the platform holds still, the board latches `INJECTED_L` after 1 s, and `CLEAR` resumes tracking.*
 
 ## Hardware
 
@@ -23,6 +29,8 @@ The scope is deliberately small (one axis, two sensors, one actuator), so the ef
 - SG90 micro servo
 - 1000 µF / 25 V electrolytic capacitor
 - half-size breadboard and jumper wires; no soldering
+
+<img src="docs/images/sensor-head.jpg" width="480" alt="The sensor head from the front: two photoresistors on a black face plate, one either side of the divider wall">
 
 ## Wiring
 
@@ -41,6 +49,8 @@ The scope is deliberately small (one axis, two sensors, one actuator), so the ef
 | Capacitor | + rail / − rail | stripe (−) to GND, next to the servo wires |
 
 Each sensor channel is a divider: 3.3 V → photoresistor → midpoint (to the ADC pin) → 4.7 kΩ → GND. More light gives a higher voltage. Left and right are seen from the platform: facing it from the front, the left photoresistor is on your right.
+
+<img src="docs/images/breadboard.jpg" width="480" alt="The breadboard from above: the ESP32, the two 4.7 kΩ resistors, the capacitor, the sensor jumpers and the servo wires">
 
 **Safety:**
 - The ESP32 is 3.3 V only. Never connect the 5 V rail, or anything above 3.3 V, to a GPIO or to the sensor circuit. The photoresistors are fed from D25, not from the rail.
@@ -100,6 +110,7 @@ On the hardware, the platform follows a torch across its whole range, finds it a
 
 ```
 docs/design.md          modes, control law, faults, protocol, wiring, limitations
+docs/images/            photos and a screenshot for this README
 firmware/
   include/config.h      pins, rates, thresholds, calibration
   lib/core/             modes, controller, faults, commands, light model (no Arduino)

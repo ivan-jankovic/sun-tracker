@@ -264,6 +264,7 @@ The serial link reads in a background thread, so the plot window stays responsiv
 CLAUDE.md
 README.md               overview, wiring, getting started
 docs/design.md
+docs/images/            photos and a screenshot for the README
 firmware/
   platformio.ini        environments: esp32dev, esp32dev-sim, native
   include/config.h      pins, rates, thresholds, calibration
