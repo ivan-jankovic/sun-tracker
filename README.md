@@ -111,3 +111,7 @@ ground/
 ## Limitations
 
 One axis, no position feedback from the servo, and photoresistors that give direction rather than accurate angles. Room light reduces precision and biases the pointing towards its side, the counterpart of Earth albedo for a real coarse sun sensor. The details and their reasons are in [docs/design.md](docs/design.md#known-limitations).
+
+## License
+
+[MIT](LICENSE)
