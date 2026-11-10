@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# The jobs only read the code; any write access would be unused risk.
+permissions:
+  contents: read
 
 jobs:
   firmware:
