@@ -1,5 +1,7 @@
 # sun-tracker
 
+[![CI](https://github.com/ivan-jankovic/sun-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/ivan-jankovic/sun-tracker/actions/workflows/ci.yml)
+
 A single-axis sun tracker, built as a small model of spacecraft sun acquisition. Two photoresistors behind a divider wall act as a coarse sun sensor, a servo turns the platform, and the firmware runs a mode manager that finds the light, points at it, keeps pointing, and handles faults in a predictable way. A Python ground station shows live telemetry and sends telecommands over USB.
 
 The scope is deliberately small (one axis, two sensors, one actuator), so the effort goes into clear behaviour, fault handling and tests. The full design, with every rule and the reasons for it, is in [docs/design.md](docs/design.md).
