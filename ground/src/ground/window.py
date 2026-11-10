@@ -280,6 +280,8 @@ class Window:
         if self._background is None:
             return  # not drawn yet: the first full redraw will call this again
         canvas = self.fig.canvas
+        if not canvas.supports_blit:
+            return  # the window was closed: matplotlib swapped in its base canvas
         if self._text_layer is None:
             canvas.restore_region(self._background)
             for text in self._texts:

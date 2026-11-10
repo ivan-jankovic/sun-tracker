@@ -72,6 +72,14 @@ def test_a_refresh_does_not_redraw_the_whole_figure(window):
     assert redraws == []
 
 
+def test_a_refresh_after_the_window_closed_does_nothing(window):
+    # Closing the window swaps in matplotlib's base canvas, which cannot blit,
+    # and the refresh timer can still fire once after that.
+    window.fig.canvas.draw()
+    plt.close(window.fig)
+    window.refresh()
+
+
 def test_dragging_the_slider_does_not_redraw_the_whole_figure(window):
     window.fig.canvas.draw()
     redraws = full_redraws(window)
