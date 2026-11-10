@@ -117,6 +117,49 @@ def test_every_command_button_sends_its_command(window, sent):
     assert sent == list(COMMANDS)
 
 
+def legend_entries(window: Window) -> list[str]:
+    return [text.get_text() for text in window.ax_angle.get_legend().get_texts()]
+
+
+@pytest.fixture
+def board_window(sent):
+    """A window fed by the real board, whose telemetry has no simulated light."""
+    state = GroundState()
+    state.feed(1000.0, "EV,0,24,MODE,BOOT,SEARCH,boot")
+    state.feed(1000.1, "TM,1,100,SEARCH,600,610,-0.008,92.3,-,-")
+    shown = Window(state, sent.append, title="test")
+    shown.refresh()
+    yield shown
+    plt.close(shown.fig)
+
+
+def test_the_simulation_build_shows_its_light_and_the_slider(window):
+    assert "simulated light" in legend_entries(window)
+    assert window.sim_sun.ax.get_visible()
+
+
+def test_the_real_board_shows_no_simulated_light_and_no_slider(board_window):
+    assert "simulated light" not in legend_entries(board_window)
+    assert not board_window.sim_sun.ax.get_visible()
+
+
+def test_the_hidden_slider_sends_nothing_when_clicked(board_window, sent):
+    click(board_window, board_window.sim_sun.ax)
+    board_window.flush_commands()
+    assert sent == []
+
+
+def test_a_change_of_build_redraws_the_window_once(board_window):
+    board_window.fig.canvas.draw()
+    redraws = full_redraws(board_window)
+    board_window.state.feed(2000.0, "EV,0,24,MODE,BOOT,SEARCH,boot")
+    board_window.state.feed(2000.1, "TM,1,100,SEARCH,600,610,-0.008,92.3,-,40.0")
+    board_window.refresh()
+    board_window.refresh()
+    assert len(redraws) == 1
+    assert board_window.sim_sun.ax.get_visible()
+
+
 def test_the_slider_starts_where_the_board_has_its_light(window, sent):
     # SESSION ends with the light at 40.0
     assert window.sim_sun.val == 40.0

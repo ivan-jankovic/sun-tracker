@@ -69,6 +69,7 @@ class Window:
         self._send = send
         self._sim_sun_pending: float | None = None
         self._slider_synced_at: int | None = None  # board restarts count when last synced
+        self._sim_shown = True  # hidden below until telemetry carries a simulated light
         self._moving: list[Artist] = []  # redrawn on every refresh
         self._texts: list[Text] = []  # redrawn only when one of them changes
         self._background = None  # the figure without the two lists above
@@ -86,6 +87,7 @@ class Window:
             self._build_commands()
         for artist in self._moving + self._texts:
             artist.set_animated(True)  # left out of full redraws
+        self._show_sim(False)
         self.fig.canvas.mpl_connect("draw_event", self._on_draw)
 
     # Plots, left: pointing, sensors, error, on one fixed time axis.
@@ -218,6 +220,8 @@ class Window:
         self.sum_line.set_data(t_s, [m.l_mv + m.r_mv for m in tms])
         self.error_line.set_data(t_s, [m.err for m in tms])
 
+        if tms:
+            self._show_sim(tms[-1].sun_deg is not None)
         self._sync_slider()
         thresholds = self.state.thresholds
         self.enter_line.set_ydata([thresholds.enter_mv] * 2)
@@ -232,6 +236,22 @@ class Window:
         self._set_text(self.status_text, self._status_lines(thresholds))
         self._set_text(self.events_text, "\n".join(_event_lines(self.state)))
         self._blit()
+
+    def _show_sim(self, shown: bool) -> None:
+        """Shows the simulated light and its slider only for the simulation build.
+
+        The real board has no simulated light and refuses SIM SUN, so a slider there
+        would be a control that never works. The legend is part of the background, so
+        a change needs one full redraw: rare, at the start or when the board changes.
+        """
+        if shown == self._sim_shown:
+            return
+        self._sim_shown = shown
+        self.sun_line.set_label("simulated light" if shown else "_simulated light")  # _ = no entry
+        _legend(self.ax_angle)
+        if self._send is not None:
+            self.sim_sun.ax.set_visible(shown)  # hidden axes get no mouse events either
+        self.fig.canvas.draw_idle()
 
     def _sync_slider(self) -> None:
         """Moves the slider to the board's light angle, without sending it back.

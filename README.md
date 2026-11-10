@@ -82,7 +82,7 @@ cd ground && uv run pytest       # ground station
 ```
 
 - **Firmware (212 tests):** one rule per test for the sensing, controller, faults, telecommand parser, mode manager and protocol, plus software-in-the-loop scenarios in the measured dark and bright rooms: acquisition, tracking a moving light, losing and finding it again, a dark room without `CAL`, open sensors, injected faults and `CLEAR`. Every scenario also checks that the platform never left its end stops.
-- **Ground station (95 tests):** the strict protocol parser with corrupted lines taken from real logs, the serial link against a loopback port, the session log, the ground state, and the plot window drawn off-screen.
+- **Ground station (99 tests):** the strict protocol parser with corrupted lines taken from real logs, the serial link against a loopback port, the session log, the ground state, and the plot window drawn off-screen.
 - **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs both test suites and builds both firmware variants on every push.
 
 Results from the SIL scenarios:
