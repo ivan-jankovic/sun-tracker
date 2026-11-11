@@ -6,7 +6,7 @@ A single-axis sun tracker, built as a small model of spacecraft sun acquisition.
 
 The scope is deliberately small (one axis, two sensors, one actuator), so the effort goes into clear behaviour, fault handling and tests. The full design, with every rule and the reasons for it, is in [docs/design.md](docs/design.md).
 
-![The platform turning to follow a torch](docs/images/tracking.webp)
+![The platform turning to follow a torch](docs/images/tracking.gif)
 
 *The platform following a torch on the real hardware.*
 
