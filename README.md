@@ -6,7 +6,9 @@ A single-axis sun tracker, built as a small model of spacecraft sun acquisition.
 
 The scope is deliberately small (one axis, two sensors, one actuator), so the effort goes into clear behaviour, fault handling and tests. The full design, with every rule and the reasons for it, is in [docs/design.md](docs/design.md).
 
-![The sensor head on the servo, wired to the ESP32 on a breadboard](docs/images/setup.jpg)
+![The platform turning to follow a torch](docs/images/tracking.webp)
+
+*The platform following a torch on the real hardware.*
 
 ## How it works
 
@@ -110,7 +112,7 @@ On the hardware, the platform follows a torch across its whole range, finds it a
 
 ```
 docs/design.md          modes, control law, faults, protocol, wiring, limitations
-docs/images/            photos and a screenshot for this README
+docs/images/            photos, a screenshot and a clip for this README
 firmware/
   include/config.h      pins, rates, thresholds, calibration
   lib/core/             modes, controller, faults, commands, light model (no Arduino)
